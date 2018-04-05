@@ -87,7 +87,7 @@ public class TestTrigger extends AbstractTrigger {
         return "Triggered by test";
     }
 
-    public String getLog() throws IOException {
+    public String getLog() throws IOException, InterruptedException {
         return new FilePath(getLogFile()).readToString();
     }
 

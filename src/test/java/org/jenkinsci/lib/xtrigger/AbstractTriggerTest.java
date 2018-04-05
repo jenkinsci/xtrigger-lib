@@ -23,7 +23,7 @@
  */
 package org.jenkinsci.lib.xtrigger;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import hudson.model.FreeStyleProject;
 
 import org.junit.Rule;
@@ -45,8 +45,8 @@ public class AbstractTriggerTest {
         trigger.start(p, true);
         trigger.run();
 
-        Thread.sleep(60000);
+        j.waitUntilNoActivityUpTo(30000);
 
-        assertTrue(p.getBuilds().size() > 0);
+        assertEquals(1, p.getBuilds().size());
     }
 }

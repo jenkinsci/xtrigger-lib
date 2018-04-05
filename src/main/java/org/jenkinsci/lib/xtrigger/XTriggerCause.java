@@ -6,6 +6,7 @@ import hudson.model.Cause;
 import hudson.model.Hudson;
 import hudson.model.TaskListener;
 import hudson.remoting.Callable;
+import jenkins.security.MasterToSlaveCallable;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
@@ -43,7 +44,7 @@ public class XTriggerCause extends Cause {
         final XTriggerCauseAction causeAction = build.getAction(XTriggerCauseAction.class);
         if (causeAction != null) {
             try {
-                Hudson.getInstance().getRootPath().act(new Callable<Void, XTriggerException>() {
+                Hudson.getInstance().getRootPath().act(new MasterToSlaveCallable<Void, XTriggerException>() {
                     @Override
                     public Void call() throws XTriggerException {
                         causeAction.setBuild(build);
