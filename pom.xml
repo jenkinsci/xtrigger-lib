@@ -39,7 +39,7 @@
         <maven.compiler.source>1.6</maven.compiler.source>
         <maven.compiler.target>1.6</maven.compiler.target>
         <jenkins.core.version>1.480</jenkins.core.version>
-        <envinject-lib.version>1.19</envinject-lib.version>
+        <envinject-lib.version>1.24</envinject-lib.version>
     </properties>
 
     <scm>
