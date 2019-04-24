@@ -4,10 +4,13 @@ import antlr.ANTLRException;
 import hudson.FilePath;
 import hudson.Util;
 import hudson.model.*;
+import hudson.model.queue.QueueTaskFuture;
+import hudson.model.queue.SubTask;
 import hudson.triggers.Trigger;
 import hudson.util.NullStream;
 import hudson.util.StreamTaskListener;
-
+import jenkins.model.Jenkins;
+import jenkins.model.ParameterizedJobMixIn;
 import org.apache.commons.io.FileUtils;
 import org.jenkinsci.lib.envinject.EnvInjectException;
 import org.jenkinsci.lib.envinject.service.EnvVarsResolver;
@@ -21,39 +24,35 @@ import java.util.concurrent.ExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import jenkins.model.Jenkins;
-
 /**
  * @author Gregory Boissinot
- * @deprecated AbstractPipelineTrigger should be used instead
  */
-@Deprecated // use AbstractPipelineTrigger
-public abstract class AbstractTrigger extends Trigger<BuildableItem> implements Serializable {
+public abstract class AbstractPipelineTrigger extends Trigger<Job<?,?>> implements Serializable {
 
-    protected static Logger LOGGER = Logger.getLogger(AbstractTrigger.class.getName());
+    protected static Logger LOGGER = Logger.getLogger(AbstractPipelineTrigger.class.getName());
 
     private String triggerLabel;
 
     private transient boolean unblockConcurrentBuild;
     protected transient boolean offlineSlaveOnStartup = false;
 
-    public AbstractTrigger(String cronTabSpec) throws ANTLRException {
+    public AbstractPipelineTrigger(String cronTabSpec) throws ANTLRException {
         super(cronTabSpec);
         this.unblockConcurrentBuild = false;
     }
 
-    protected AbstractTrigger(String cronTabSpec, boolean unblockConcurrentBuild) throws ANTLRException {
+    protected AbstractPipelineTrigger(String cronTabSpec, boolean unblockConcurrentBuild) throws ANTLRException {
         super(cronTabSpec);
         this.unblockConcurrentBuild = unblockConcurrentBuild;
     }
 
-    protected AbstractTrigger(String cronTabSpec, String triggerLabel) throws ANTLRException {
+    protected AbstractPipelineTrigger(String cronTabSpec, String triggerLabel) throws ANTLRException {
         super(cronTabSpec);
         this.triggerLabel = Util.fixEmpty(triggerLabel);
         this.unblockConcurrentBuild = false;
     }
 
-    protected AbstractTrigger(String cronTabSpec, String triggerLabel, boolean unblockConcurrentBuild) throws ANTLRException {
+    protected AbstractPipelineTrigger(String cronTabSpec, String triggerLabel, boolean unblockConcurrentBuild) throws ANTLRException {
         super(cronTabSpec);
         this.triggerLabel = Util.fixEmpty(triggerLabel);
         this.unblockConcurrentBuild = unblockConcurrentBuild;
@@ -79,7 +78,7 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
     protected abstract boolean requiresWorkspaceForPolling();
 
     @Override
-    public void start(BuildableItem project, boolean newInstance) {
+    public void start(Job<?, ?>  project, boolean newInstance) {
         super.start(project, newInstance);
 
         XTriggerLog log = new XTriggerLog(new StreamTaskListener(new NullStream()));
@@ -109,7 +108,7 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
     /**
      * Can be overridden if needed
      */
-    protected void start(Node pollingNode, BuildableItem project, boolean newInstance, XTriggerLog log) throws XTriggerException {
+    protected void start(Node pollingNode, Job<?, ?>  project, boolean newInstance, XTriggerLog log) throws XTriggerException {
     }
 
     @Deprecated // as of 0.34.
@@ -126,6 +125,7 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
 
     @Override
     public void run() {
+        LOGGER.fine(String.format("running trigger: %s : %s : %s ", this.getName(), this.getTriggerLabel(), this));
         Job project = (Job) job;
         XTriggerDescriptor descriptor = getDescriptor();
         ExecutorService executorService = descriptor.getExecutor();
@@ -140,8 +140,11 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
             } else if (!unblockConcurrentBuild && project.isBuilding()) {
                 log.info("The job is building. Waiting for next poll.");
             } else {
+                LOGGER.fine("get runner");
                 Runner runner = new Runner(getName());
+                LOGGER.fine(String.format("with runner: %s", runner));
                 executorService.execute(runner);
+                LOGGER.fine("passed to executor service");
             }
         } catch (Throwable t) {
             LOGGER.log(Level.SEVERE, "Severe error during the trigger execution " + t.getMessage());
@@ -174,6 +177,7 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
         public void run() {
             XTriggerLog log = null;
             try {
+                LOGGER.fine("running runner");
 
                 StreamTaskListener listener = new StreamTaskListener(getLogFile());
                 log = new XTriggerLog(listener);
@@ -181,6 +185,9 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
                 long start = System.currentTimeMillis();
                 log.info("Polling started on " + DateFormat.getDateTimeInstance().format(new Date(start)));
                 log.info("Polling for the job " + job.getName());
+
+                LOGGER.fine("Polling started on " + DateFormat.getDateTimeInstance().format(new Date(start)));
+                LOGGER.fine("Polling for the job " + job.getName());
 
                 boolean changed;
 
@@ -191,12 +198,17 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
                         log.info("Can't find any complete active node for the polling action.");
                         log.info("Maybe slaves are not yet active at this time or the number of executor of the master is 0.");
                         log.info("Checking again in next polling schedule.");
+                        LOGGER.fine("Can't find any complete active node for the polling action.");
+                        LOGGER.fine("Maybe slaves are not yet active at this time or the number of executor of the master is 0.");
+                        LOGGER.fine("Checking again in next polling schedule.");
                         return;
                     }
 
                     if (pollingNode.getRootPath() == null) {
                         log.info("The running slave might be offline at the moment.");
                         log.info("Waiting for next schedule.");
+                        LOGGER.fine("The running slave might be offline at the moment.");
+                        LOGGER.fine("Waiting for next schedule.");
                         return;
                     }
 
@@ -209,16 +221,28 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
 
 
                 log.info("\nPolling complete. Took " + Util.getTimeSpanString(System.currentTimeMillis() - start) + ".");
+                LOGGER.fine("Polling complete. Took " + Util.getTimeSpanString(System.currentTimeMillis() - start) + ".");
 
                 if (changed) {
                     log.info("Changes found. Scheduling a build.");
+                    LOGGER.fine("Changes found. Scheduling a build.");
 
                     //TODO: Check whether the schedule() operation returns non-null future
                     List<Action> actions = new ArrayList<Action>(Arrays.asList(getScheduledXTriggerActions(null, log)));
                     actions.add(new CauseAction(new XTriggerCause(triggerName, getCause(), true)));
-                    hudson.model.Queue.getInstance().schedule(job, 0, actions);
+
+                    ParameterizedJobMixIn<?, ?> jobMixIn = new ParameterizedJobMixIn() {
+                        @Override
+                        protected Job<?, ?> asJob() {
+                            return (Job<?, ?>)job;
+                        }
+                    };
+                    QueueTaskFuture<?> futureTask = jobMixIn.scheduleBuild2(0,actions.toArray(new Action[0]));
+                    LOGGER.fine("Scheduled build: " + futureTask);
+                    //hudson.model.Queue.getInstance().schedule(job, 0, actions);
                 } else {
                     log.info("No changes.");
+                    LOGGER.fine("No changes.");
                 }
             } catch (XTriggerException e) {
                 reportError(log, e);
@@ -397,11 +421,13 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
 
         //Search for the last built on
         log.info("Looking for the last built on node.");
-        Node lastBuildOnNode = job.getLastBuiltOn();
-        if (lastBuildOnNode == null) {
-            return getPollingNodeNoPreviousBuild(log);
+        if (job instanceof SubTask) {
+            Node lastBuildOnNode = ((SubTask)job).getLastBuiltOn();
+            if (lastBuildOnNode != null) {
+                return Arrays.asList(lastBuildOnNode);
+            }
         }
-        return Arrays.asList(lastBuildOnNode);
+        return getPollingNodeNoPreviousBuild(log);
     }
 
     private boolean eligibleNode(Node node) {
@@ -439,12 +465,13 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
      * Returns the label if any to poll
      */
     private Label getTargetLabel(XTriggerLog log) {
-        Label assignedLabel = job.getAssignedLabel();
-        if (assignedLabel != null) {
-            log.info(String.format("Trying to find an eligible node with the assigned project label %s.", assignedLabel));
-            return assignedLabel;
+        if (job instanceof SubTask) {
+            Label assignedLabel = ((SubTask) job).getAssignedLabel();
+            if (assignedLabel != null) {
+                log.info(String.format("Trying to find an eligible node with the assigned project label %s.", assignedLabel));
+                return assignedLabel;
+            }
         }
-
         return null;
     }
 
@@ -457,7 +484,7 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
         }
     }
 
-    private List<Node> getNodesLabel(BuildableItem buildable, Label label) {
+    private List<Node> getNodesLabel(Job<?,?> buildable, Label label) {
         List<Node> result = new ArrayList<Node>();
         List<Node> remainingNodes = new ArrayList<Node>();
 
@@ -473,9 +500,11 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
                     FilePath nodeRootPath = node.getRootPath();
                     if (nodeRootPath != null) {
                         //We recommend first the samed node
-                        Node lastBuildOnNode = buildable.getLastBuiltOn();
-                        if (lastBuildOnNode != null && nodeRootPath.equals(lastBuildOnNode.getRootPath())) {
-                            result.add(0, node);
+                        if (buildable instanceof SubTask) {
+                            Node lastBuildOnNode = ((SubTask) buildable).getLastBuiltOn();
+                            if (lastBuildOnNode != null && nodeRootPath.equals(lastBuildOnNode.getRootPath())) {
+                                result.add(0, node);
+                            }
                         } else {
                             remainingNodes.add(node);
                         }
@@ -491,9 +520,11 @@ public abstract class AbstractTrigger extends Trigger<BuildableItem> implements 
         }
     }
 
-    private boolean isAPreviousBuildNode(BuildableItem buildable) {
-        Node lastBuildOnNode = buildable.getLastBuiltOn();
-        return lastBuildOnNode != null;
+    private boolean isAPreviousBuildNode(Job<?,?> buildable) {
+        if (buildable instanceof SubTask) {
+            Node lastBuildOnNode = ((SubTask) buildable).getLastBuiltOn();
+            return lastBuildOnNode != null;
+        }
+        return false;
     }
-
 }

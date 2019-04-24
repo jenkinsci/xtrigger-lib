@@ -23,6 +23,7 @@
  */
 package org.jenkinsci.lib.xtrigger;
 
+import antlr.ANTLRException;
 import hudson.FilePath;
 import hudson.model.Action;
 import hudson.model.Node;
@@ -30,20 +31,18 @@ import hudson.model.Node;
 import java.io.File;
 import java.io.IOException;
 
-import antlr.ANTLRException;
-
 /**
  * Explicit trigger for testing purposes.
  *
  * @author ogondza
  */
-public class TestTrigger extends AbstractTrigger {
+public class TestPipelineTrigger extends AbstractPipelineTrigger {
     private static final long serialVersionUID = 1L;
 
     private final File log;
     private volatile boolean triggered = false;
 
-    public TestTrigger() throws ANTLRException {
+    public TestPipelineTrigger() throws ANTLRException {
         super("* * * * *");
         try {
             log = File.createTempFile("xtrigger", "test");

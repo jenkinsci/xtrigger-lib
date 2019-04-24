@@ -1,16 +1,14 @@
 package org.jenkinsci.lib.xtrigger;
 
 import antlr.ANTLRException;
-import hudson.model.BuildableItem;
+import hudson.model.Job;
 import hudson.model.Node;
 
 
 /**
  * @author Gregory Boissinot
- * @deprecated AbstractPipelineTriggerByFullContext should be used instead
  */
-@Deprecated // use AbstractPipelineTriggerByFullContext
-public abstract class AbstractTriggerByFullContext<C extends XTriggerContext> extends AbstractTrigger {
+public abstract class AbstractPipelineTriggerByFullContext<C extends XTriggerContext> extends AbstractPipelineTrigger {
 
     private transient C context;
 
@@ -23,19 +21,19 @@ public abstract class AbstractTriggerByFullContext<C extends XTriggerContext> ex
      * @param cronTabSpec the scheduler value
      * @throws ANTLRException the expression language expression
      */
-    public AbstractTriggerByFullContext(String cronTabSpec) throws ANTLRException {
+    public AbstractPipelineTriggerByFullContext(String cronTabSpec) throws ANTLRException {
         super(cronTabSpec);
     }
 
-    protected AbstractTriggerByFullContext(String cronTabSpec, boolean unblockConcurrentBuild) throws ANTLRException {
+    protected AbstractPipelineTriggerByFullContext(String cronTabSpec, boolean unblockConcurrentBuild) throws ANTLRException {
         super(cronTabSpec, unblockConcurrentBuild);
     }
 
-    protected AbstractTriggerByFullContext(String cronTabSpec, String triggerLabel) throws ANTLRException {
+    protected AbstractPipelineTriggerByFullContext(String cronTabSpec, String triggerLabel) throws ANTLRException {
         super(cronTabSpec, triggerLabel);
     }
 
-    protected AbstractTriggerByFullContext(String cronTabSpec, String triggerLabel, boolean unblockConcurrentBuild) throws ANTLRException {
+    protected AbstractPipelineTriggerByFullContext(String cronTabSpec, String triggerLabel, boolean unblockConcurrentBuild) throws ANTLRException {
         super(cronTabSpec, triggerLabel, unblockConcurrentBuild);
     }
 
@@ -43,7 +41,7 @@ public abstract class AbstractTriggerByFullContext<C extends XTriggerContext> ex
      * Can be overridden if needed
      */
     @Override
-    protected void start(Node pollingNode, BuildableItem project, boolean newInstance, XTriggerLog log) throws XTriggerException {
+    protected void start(Node pollingNode, Job<?,?> project, boolean newInstance, XTriggerLog log) throws XTriggerException {
         if (isContextOnStartupFetched()) {
             context = getContext(pollingNode, log);
         }
